@@ -3,6 +3,8 @@
 Framework d'audit et de test d'intrusion **automatisé** pour applications web, orchestrant une douzaine d'outils Kali Linux dans un pipeline unique, avec une interface terminal et un **rapport final JSON + PDF**.
 
 > ⚠️ **Usage strictement autorisé.** N'utilisez ce framework que sur des systèmes que vous êtes **explicitement autorisé** à tester (votre propre lab, une cible d'entraînement type OWASP Juice Shop, ou un périmètre de pentest contractualisé). Tout scan non autorisé est illégal.
+>
+> Deux garde-fous techniques bloquent tout audit sur une cible non autorisée : une **allowlist obligatoire** ([`cibles_autorisees.txt`](pentest_framework/cibles_autorisees.txt)) et une **attestation utilisateur bloquante** au démarrage. Voir la section [Garde-fous](#-garde-fous-autorisation-des-cibles).
 
 ---
 
@@ -106,6 +108,35 @@ pentest_framework/
 ├── wrap_sqlmap.sh       # Injection SQL
 └── wrap_hydra.sh        # Brute-force d'authentification
 ```
+
+---
+
+## 🛡️ Garde-fous (autorisation des cibles)
+
+Le framework refuse de scanner une cible qui n'a pas été explicitement autorisée. Deux vérifications sont effectuées **avant** tout appel réseau (subfinder, nmap, etc.) :
+
+### 1. Allowlist — `pentest_framework/cibles_autorisees.txt`
+
+Le programme sort avec le code `2` si la cible n'est pas listée dans ce fichier. Format :
+
+```
+# Cibles exactes
+testphp.vulnweb.com
+localhost
+
+# Wildcard sous-domaines
+*.vulnweb.com
+```
+
+- Une cible par ligne, `#` pour les commentaires.
+- La normalisation ignore le schéma, le port et le chemin : `https://testphp.vulnweb.com:8080/foo` matche l'entrée `testphp.vulnweb.com`.
+- Wildcards de sous-domaine supportés via `*.domaine.tld`.
+
+### 2. Attestation utilisateur bloquante
+
+Avant tout scan actif, l'utilisateur doit **taper `oui`** explicitement pour attester disposer d'une autorisation écrite. Toute autre réponse (y compris Enter à vide) annule l'audit.
+
+Ces protections ne remplacent pas une autorisation légale — elles empêchent seulement les usages accidentels ou par erreur de saisie.
 
 ---
 
