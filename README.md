@@ -49,9 +49,9 @@ lanceur.sh ──► orchestrateur.py ──► wrap_*.sh ──► outils Kali
                      └──── fichiers JSON ─┘
 ```
 
-- **`lanceur.sh`** — point d'entrée : installe les dépendances (apt + venv Python), fixe les permissions, lance l'orchestrateur.
-- **`orchestrateur.py`** — le chef d'orchestre : enchaîne les phases, **parallélise** les outils indépendants (pour tenir sous ~5 min), appelle les wrappers, parse les résultats et génère les rapports. Interface terminal via **Rich**.
-- **`wrap_*.sh`** — un adaptateur par outil : chacun vérifie/installe son outil, le lance avec des options bornées par `timeout`, et produit une **sortie JSON normalisée**.
+- **`lanceur.sh`** — point d'entrée shell : installe les dépendances (apt + venv Python), fixe les permissions, lance `main.py`.
+- **`main.py` + modules Python** — le code applicatif, organisé en modules à responsabilité unique (voir [structure](#-structure-du-projet)) : orchestration, parsers, reporting, contrôle d'accès… Interface terminal via **Rich**.
+- **`wrappers/wrap_*.sh`** — un adaptateur par outil : chacun vérifie/installe son outil, le lance avec des options bornées par `timeout`, et produit une **sortie JSON normalisée**.
 
 ---
 
@@ -93,21 +93,50 @@ Chaque résultat est classé par niveau de risque : **Critical / High / Medium /
 
 ```
 pentest_framework/
-├── lanceur.sh           # Point d'entrée (1 commande)
-├── orchestrateur.py     # Orchestration + UI + parsing + rapports
-├── wrap_subfinder.sh    # Énumération de sous-domaines
-├── wrap_nmap.sh         # Scan de ports/services
-├── wrap_httpx.sh        # Probe HTTP/HTTPS
-├── wrap_whatweb.sh      # Fingerprint technologique
-├── wrap_testssl.sh      # Audit TLS/SSL
-├── wrap_katana.sh       # Crawl JS-aware (SPA)
-├── wrap_ffuf.sh         # Brute-force de répertoires
-├── wrap_arjun.sh        # Découverte de paramètres HTTP
-├── wrap_nuclei.sh       # Scan de vulnérabilités par templates
-├── wrap_zap.sh          # DAST dynamique (OWASP ZAP)
-├── wrap_sqlmap.sh       # Injection SQL
-└── wrap_hydra.sh        # Brute-force d'authentification
+├── lanceur.sh              # Bootstrap : dépendances + venv + lancement
+├── main.py                 # Point d'entrée Python (garde-fous + pipeline)
+├── cibles_autorisees.txt   # Allowlist des cibles
+│
+├── config.py               # Constantes globales (fichiers, ports, sévérités)
+├── ui.py                   # Console Rich partagée
+├── runner.py               # Exécution des wrappers + parallélisme (threads)
+├── autorisation.py         # Allowlist + attestation utilisateur
+├── services.py             # Services Nmap : lecture, URLs actives, affichage
+├── selection.py            # UI interactive : choix des services Hydra
+├── orchestration.py        # Séquencement des phases d'audit
+│
+├── parsers/                # Un fichier par outil → findings normalisés
+│   ├── __init__.py         #   expose parser_tout()
+│   ├── base.py             #   helpers (ajouter_resultat, ...)
+│   ├── nuclei.py, zap.py, sqlmap.py, hydra.py
+│   └── whatweb.py, testssl.py, ffuf.py, arjun.py
+│
+├── reporting/              # Trois formats de sortie
+│   ├── __init__.py
+│   ├── rapport.py          #   construit le dict rapport → JSON
+│   ├── pdf.py              #   rendu PDF (fpdf2)
+│   └── console.py          #   synthèse terminal (Rich)
+│
+└── wrappers/               # Adaptateurs shell (un par outil)
+    ├── wrap_subfinder.sh   #   Énumération de sous-domaines
+    ├── wrap_nmap.sh        #   Scan de ports/services
+    ├── wrap_httpx.sh       #   Probe HTTP/HTTPS
+    ├── wrap_whatweb.sh     #   Fingerprint technologique
+    ├── wrap_testssl.sh     #   Audit TLS/SSL
+    ├── wrap_katana.sh      #   Crawl JS-aware (SPA)
+    ├── wrap_ffuf.sh        #   Brute-force de répertoires
+    ├── wrap_arjun.sh       #   Découverte de paramètres HTTP
+    ├── wrap_nuclei.sh      #   Scan de vulnérabilités par templates
+    ├── wrap_zap.sh         #   DAST dynamique (OWASP ZAP)
+    ├── wrap_sqlmap.sh      #   Injection SQL
+    └── wrap_hydra.sh       #   Brute-force d'authentification
 ```
+
+### Règles d'architecture
+
+- **Un module = une responsabilité.** Les modules feuilles (`config`, `ui`) ne dépendent de rien. Les modules métier (`parsers/`, `reporting/`) ne dépendent que de `config` et `ui`. `orchestration.py` coordonne. `main.py` est le point d'entrée mince.
+- **Communication par fichiers.** Wrappers shell et Python communiquent uniquement via des fichiers `.json` / `.txt` (chemins dans `config.py`) — découplage total.
+- **Ajouter un outil = 2 fichiers.** Un `wrappers/wrap_X.sh` (exécution + JSON) + un `parsers/X.py` (parsing → findings). Zéro couplage avec les autres outils.
 
 ---
 
